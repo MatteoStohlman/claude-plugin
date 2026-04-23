@@ -2,7 +2,10 @@
     "mcpServers": {
         "vello": {
             "type": "https",
-            "url": "https://idixwgjfgjkddjxpudkn.supabase.co/functions/v1/vello-mcp?key=${VELLO_API_KEY}"
+            "url": "https://idixwgjfgjkddjxpudkn.supabase.co/functions/v1/vello-mcp",
+            "headers": {
+                "Authorization": "Bearer ${VELLO_API_KEY}"
+            }
         }
     }
 }
