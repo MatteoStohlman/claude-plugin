@@ -1,0 +1,9 @@
+{
+  "name": "matteo-skills",
+  "version": "0.1.0",
+  "description": "Personal skills, commands, and agents shared across Claude accounts",
+  "author": {
+    "name": "Matteo Stohlman",
+    "email": "matteo@tech4trades.com"
+  }
+}

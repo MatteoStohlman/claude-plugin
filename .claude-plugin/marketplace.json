@@ -1,0 +1,14 @@
+{
+  "name": "matteo-plugins",
+  "owner": {
+    "name": "Matteo Stohlman",
+    "email": "matteo@tech4trades.com"
+  },
+  "plugins": [
+    {
+      "name": "matteo-skills",
+      "source": "./",
+      "description": "Personal skills, commands, and agents shared across Claude accounts"
+    }
+  ]
+}
