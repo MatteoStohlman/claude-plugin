@@ -1,8 +1,8 @@
 {
     "mcpServers": {
         "vello": {
-            "command": "npx",
-            "args": ["-y", "mcp-remote", "https://idixwgjfgjkddjxpudkn.supabase.co/functions/v1/vello-mcp?key=${VELLO_API_KEY}"]
+            "type": "https",
+            "url": "https://idixwgjfgjkddjxpudkn.supabase.co/functions/v1/vello-mcp?key=${VELLO_API_KEY}"
         }
     }
 }
