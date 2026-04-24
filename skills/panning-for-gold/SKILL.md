@@ -2,7 +2,7 @@
 name: panning-for-gold
 description: Use when processing voice transcripts, brain dumps, stream-of-consciousness notes, or any raw multi-topic capture. Extracts every idea thread, then evaluates each one with deep brainstorming, then captures results to Vello. Trigger on transcripts, exports, "process this", "pan for gold", "brain dump", "what did I say", or multi-topic markdown files.
 author: Jared Irish (ported by Matteo Stohlman)
-version: 2.0.0
+version: 2.1.0
 ---
 
 # Panning for Gold
@@ -25,15 +25,50 @@ Transform raw brain dumps into evaluated, actionable idea inventories. Three pha
 
 These rules exist because they've been violated and caused wasted work:
 
-1. **SAVE EVERYTHING TO PERMANENT FILES.** Phase 1 inventory, Phase 2 evaluations, and Phase 3 synthesis ALL get saved to files in the project's docs directory. Never rely on agent memory or temp task outputs surviving compaction.
+1. **SAVE EVERYTHING TO PERMANENT FILES UNDER THE CANONICAL PATH.** Phase 1 inventory, Phase 2 evaluations, and Phase 3 synthesis ALL get saved to files under `~/.vello/panning/` (the user's home directory — see the "Canonical Output Path" section below). Never rely on agent memory or temp task outputs surviving compaction. Never write these artifacts into project-local `docs/` directories: panning artifacts are cross-project knowledge and must not leak into work repos via git.
 
 2. **SUMMARIES FIRST, TRANSCRIPT SECOND.** If a summary/notes file exists alongside a transcript, use the summary as the primary extraction source. Only read the full transcript for: (a) exact quotes to support threads, (b) verifying completeness on the second pass. This saves 10-20K tokens per scan.
 
-3. **EVALUATORS WRITE TO FILES.** Every background evaluator agent MUST write its evaluation to a permanent file (e.g., `docs/meetings/evaluations/YYYY-MM-DD-{slug}.md`) as part of its task. Do not depend on collecting agent return values.
+3. **EVALUATORS WRITE TO FILES.** Every background evaluator agent MUST write its evaluation to a permanent file under the canonical path (e.g., `~/.vello/panning/evaluations/YYYY-MM-DD-{slug}.md`) as part of its task. Do not depend on collecting agent return values.
 
 4. **SYNTHESIS HAPPENS INLINE.** Do not dispatch a separate agent for synthesis. Write the gold-found file yourself after evaluators finish. If evaluators disappear (compaction, task ID loss), write the synthesis from your own reading.
 
 5. **TWO PASSES ON TRANSCRIPTS.** Always run Phase 1 twice. First pass uses summary + targeted transcript reads. Second pass is a verification scan for missed threads. Present both inventories merged.
+
+## Canonical Output Path
+
+All file artifacts produced by this skill — raw transcripts, cleaned transcripts, inventories, per-idea evaluations, and gold-found syntheses — MUST be written under a single canonical root in the user's home directory:
+
+```
+~/.vello/panning/
+```
+
+(Absolute form: `$HOME/.vello/panning/`. Expand `~` or `$HOME` to the user's actual home directory before writing — do not write a literal `~` path.)
+
+### Layout
+
+```
+~/.vello/panning/
+├── YYYY-MM-DD-{source}-transcript.md        # Phase 0: raw input
+├── YYYY-MM-DD-{source}-clean-transcript.md  # Phase 0.5: optional, multi-speaker only
+├── YYYY-MM-DD-{source}-inventory.md         # Phase 1: numbered thread inventory
+├── YYYY-MM-DD-{source}-gold-found.md        # Phase 3: synthesis
+└── evaluations/
+    └── YYYY-MM-DD-{idea-slug}.md            # Phase 2: one file per ACT NOW thread
+```
+
+### Why an absolute, non-project path
+
+1. **No scatter.** Without a fixed root, artifacts land wherever the AI client's cwd is at invocation time, scattering transcripts across every repo the user touches.
+2. **No accidental git commits.** Panning artifacts often contain private voice-transcript content, PII, or client-confidential material. Writing them into work repos risks committing and pushing that content. The home-directory root keeps them outside every project.
+3. **Cross-project continuity.** Panning output is knowledge, not code. Multiple projects may reference the same thinking; pinning the root makes every session discoverable from any cwd.
+4. **Recovery anchor only.** These files are NOT the durable memory — Vello (pgvector) is. The files are a local audit trail in case an evaluator agent dies or context is compacted. One canonical root is enough.
+
+### Operational notes
+
+- Create the directory if it does not exist: `mkdir -p ~/.vello/panning/evaluations`
+- Do NOT commit `~/.vello/` to any repo. It is user-global state, not project state.
+- If the user explicitly overrides the path for a specific run (e.g., "write this to the project docs instead"), honor the override but name the path explicitly — do not silently fall back to project-local `docs/` defaults.
 
 ## Process
 
@@ -73,7 +108,7 @@ digraph panning {
 
 **BEFORE ANY ANALYSIS:** Save the raw transcript/brain dump to a file if it's not already saved. Order: save first, analyze second. This rule exists because of two violations in a single session (2026-03-13).
 
-File naming: `docs/meetings/YYYY-MM-DD-{source}-transcript.md` or `docs/brainstorming/YYYY-MM-DD-{topic}.md`
+File path: `~/.vello/panning/YYYY-MM-DD-{source}-transcript.md` (see "Canonical Output Path" above). Use a slug that makes the source recognizable months later — e.g., `2026-04-23-vello-walk-memo-transcript.md`.
 
 ## Phase 0.5: Speaker Consolidation & Identification (Multi-Speaker Transcripts Only)
 
@@ -145,7 +180,7 @@ Collect all MEDIUM and LOW attributions into ONE numbered list. Present to user.
 
 #### Step 6: Produce Clean Transcript (Optional but recommended for high-value meetings)
 
-If the meeting is high-value (potential deal, important relationship), produce a cleaned version with consolidated speaker names replacing label numbers. Save as `YYYY-MM-DD-{source}-clean-transcript.md`. This becomes the canonical reference.
+If the meeting is high-value (potential deal, important relationship), produce a cleaned version with consolidated speaker names replacing label numbers. Save as `~/.vello/panning/YYYY-MM-DD-{source}-clean-transcript.md`. This becomes the canonical reference.
 
 ### Decision: Is Re-Extraction Needed?
 
@@ -180,7 +215,7 @@ For each thread, capture:
 
 ### Save the Inventory
 
-**IMMEDIATELY** save the Phase 1 inventory to `docs/meetings/YYYY-MM-DD-{source}-inventory.md` or equivalent. This file survives compaction even if nothing else does.
+**IMMEDIATELY** save the Phase 1 inventory to `~/.vello/panning/YYYY-MM-DD-{source}-inventory.md`. This file survives compaction even if nothing else does.
 
 ### Present the Inventory
 
@@ -238,7 +273,7 @@ Be honest. Don't inflate value. Don't dismiss things as "someday" just because t
 - Use Opus (`model: opus`) for ideas that connect to SHIP projects or involve strategic decisions
 - Use Sonnet for lower-stakes research (hardware, consumer products, wellness)
 - Use Haiku for quick feasibility checks (does an API exist? is this legal?)
-- Output path: `docs/meetings/evaluations/YYYY-MM-DD-{idea-slug}.md`
+- Output path: `~/.vello/panning/evaluations/YYYY-MM-DD-{idea-slug}.md`
 
 ## Phase 3: Synthesis
 
@@ -249,7 +284,7 @@ Write the gold-found file **yourself** (do not delegate to an agent). Collect fr
 
 ### Gold-Found File Location
 
-`docs/meetings/YYYY-MM-DD-{source}-gold-found.md`
+`~/.vello/panning/YYYY-MM-DD-{source}-gold-found.md`
 
 ### Summary Format
 
@@ -321,6 +356,7 @@ If any lesson is learned, update this skill file directly. The skill improves wi
 | 2026-03-18 | 10 speaker labels generated for 2-person conversation. Labels are WORSE than useless, they actively mislead. Same person gets different labels across environments, different people share labels. | Added Phase 0.5: Speaker Consolidation & Identification. Must clean speaker data before ANY thread extraction. Ask user who was present FIRST. |
 | 2026-03-18 | Voice labels swapped between two speakers caused 40+ threads to be misattributed. Pain points became pitches and vice versa. | Phase 0.5 now includes anchor-line identification, scene-based re-attribution, and a decision framework for whether re-extraction is needed. |
 | 2026-03-18 | "Don't be stingy with the extract" - first pass had 42 threads, expanded to 82 after user pushed back. Collapsing related threads and skipping "non-business" categories loses signal. | Added to Common Mistakes. Default to over-extraction, let Phase 2 triage handle prioritization. |
+| 2026-04-23 | Default project-local `docs/meetings/` paths scattered panning artifacts across every repo the user touched and created a data-leak risk (voice transcripts getting committed to work repos). | Added "Canonical Output Path" section pinning all artifacts to `~/.vello/panning/`. Strengthened Critical Rule 1 to forbid project-local writes. |
 
 ## Red Flags: You're Rushing
 
